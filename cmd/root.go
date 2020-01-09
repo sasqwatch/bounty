@@ -1,0 +1,48 @@
+package cmd
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/spf13/cobra"
+)
+
+var ToolName = "bounty"
+var Version = "0.0.0"
+var BuildDate = "2020-01-01"
+
+type bountyParameters struct {
+	Verbose    bool
+	SSHPorts   string
+	SSHHostKey string
+}
+
+var params = &bountyParameters{}
+
+var rootCmd = &cobra.Command{
+	Use:   ToolName,
+	Short: fmt.Sprintf("%s captures inbound credentials", ToolName),
+	Long:  fmt.Sprintf(`Bounty v%s [%s]`, Version, BuildDate),
+	Args:  cobra.ArbitraryArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		startCapture(cmd, args)
+	},
+}
+
+// Execute is the main entry point for this tool
+func Execute() {
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+}
+
+func init() {
+
+	// General options
+	rootCmd.PersistentFlags().BoolVarP(&params.Verbose, "verbose", "v", false, "Display verbose output")
+
+	// SSH parameters
+	rootCmd.Flags().StringVarP(&params.SSHPorts, "ssh-ports", "", "22", "The list of TCP ports to listen on for SSH")
+	rootCmd.Flags().StringVarP(&params.SSHHostKey, "ssh-host-key", "", "", "An optional path to a SSH host key on disk")
+}
