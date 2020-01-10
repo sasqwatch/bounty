@@ -4,9 +4,15 @@ The quicker credential picker upper
 
 ## Usage
 
-1. Build a binary
+1. Build and/or install a binary
+
+
 ```
 $ GOOS=win32 GOARCH=amd64 go build -o bounty.exe
+```
+
+```
+$ go install -v github.com/hdm/bounty
 ```
 
 2. Run the binary and collect credentials
