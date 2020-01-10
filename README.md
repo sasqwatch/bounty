@@ -14,7 +14,7 @@ $ GOOS=win32 GOARCH=amd64 go build -o bounty.exe
 ```
 
 ```
-$ go install -v github.com/hdm/bounty
+$ go get github.com/hdm/bounty && go install -v github.com/hdm/bounty && $GOPATH/bin/bounty
 ```
 
 2. Run the binary and collect credentials
