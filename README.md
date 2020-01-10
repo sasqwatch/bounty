@@ -1,6 +1,8 @@
 # Bounty 
 
-The quicker credential picker upper
+The quicker credential picker upper.
+
+Currently supports SSH and SNMP credential collection.
 
 ## Usage
 
