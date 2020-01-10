@@ -8,8 +8,8 @@ import (
 )
 
 var ToolName = "bounty"
-var Version = "0.0.0"
-var BuildDate = "2020-01-01"
+var Version = "0.0.1"
+var BuildDate = "2020-01-10"
 
 type bountyParameters struct {
 	Verbose    bool

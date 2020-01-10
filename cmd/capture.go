@@ -1,7 +1,11 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -15,9 +19,25 @@ import (
 )
 
 var protocolCount = 0
+var stdoutLogging = false
+
 var cleanupHandlers = []func(){}
 
 func startCapture(cmd *cobra.Command, args []string) {
+
+	fm := log.FieldMap{
+		log.FieldKeyTime: "_etime",
+		log.FieldKeyMsg:  "output",
+	}
+
+	// Configure the JSON formatter
+	log.SetFormatter(&log.JSONFormatter{TimestampFormat: time.RFC3339, FieldMap: fm})
+
+	// Set debug level if verbose is configured
+	if params.Verbose {
+		log.SetLevel(log.DebugLevel)
+	}
+
 	done := false
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -33,18 +53,19 @@ func startCapture(cmd *cobra.Command, args []string) {
 		protocols[pname] = true
 	}
 
-	// TODO: Configure output actions
+	// Configure output actions
+	rw := setupOutput(args)
 
 	// Setup protocol listeners
 
 	// SNMP
 	if _, enabled := protocols["snmp"]; enabled {
-		setupSNMP()
+		setupSNMP(rw)
 	}
 
 	// SSH
 	if _, enabled := protocols["ssh"]; enabled {
-		setupSSH()
+		setupSSH(rw)
 	}
 
 	// Make sure at least one capture is running
@@ -56,8 +77,18 @@ func startCapture(cmd *cobra.Command, args []string) {
 	for {
 		if done {
 			log.Printf("shutting down...")
-			for _, cleanupHandler := range cleanupHandlers {
-				cleanupHandler()
+
+			// Clean up protocol handlers
+			for _, handler := range cleanupHandlers {
+				handler()
+			}
+
+			// Stop processing output
+			rw.Done()
+
+			// Clean up output writers
+			for _, handler := range rw.OutputCleaners {
+				handler()
 			}
 			break
 		}
@@ -65,7 +96,94 @@ func startCapture(cmd *cobra.Command, args []string) {
 	}
 }
 
-func setupSSH() {
+func setupOutput(outputs []string) *bounty.RecordWriter {
+	stdoutLogging := false
+
+	rw := bounty.NewRecordWriter()
+	if len(outputs) == 0 {
+		rw.OutputWriters = append(rw.OutputWriters, stdoutWriter)
+		stdoutLogging = true
+		return rw
+	}
+
+	for _, output := range outputs {
+		if output == "-" && !stdoutLogging {
+			rw.OutputWriters = append(rw.OutputWriters, stdoutWriter)
+			stdoutLogging = true
+			continue
+		}
+
+		if strings.HasPrefix(output, "http://") || strings.HasPrefix(output, "https://") {
+			writer, cleaner, err := getWebhookWriter(output)
+			if err != nil {
+				log.Fatalf("failed to configure output %s: %s", output, err)
+			}
+			rw.OutputWriters = append(rw.OutputWriters, writer)
+			if cleaner != nil {
+				rw.OutputCleaners = append(rw.OutputCleaners, cleaner)
+			}
+			continue
+		}
+
+		// Assume anything else is a file output
+		writer, cleaner, err := getFileWriter(output)
+		if err != nil {
+			log.Fatalf("failed to configure output %s: %s", output, err)
+		}
+		rw.OutputWriters = append(rw.OutputWriters, writer)
+		if cleaner != nil {
+			rw.OutputCleaners = append(rw.OutputCleaners, cleaner)
+		}
+	}
+
+	// Always log to standard output
+	if !stdoutLogging {
+		rw.OutputWriters = append(rw.OutputWriters, stdoutWriter)
+	}
+
+	return rw
+}
+
+func stdoutWriter(rec map[string]string) error {
+	lf := log.Fields{}
+	for k, v := range rec {
+		if k == "_etime" {
+			continue
+		}
+		lf[k] = v
+	}
+
+	log.WithFields(lf).Info("credential")
+	return nil
+}
+
+func getFileWriter(path string) (bounty.OutputWriter, bounty.OutputCleaner, error) {
+	fd, err := os.Create(path)
+	if err != nil {
+		return bounty.OutputWriterNoOp, nil, err
+	}
+
+	return func(rec map[string]string) error {
+		bytes, err := json.Marshal(rec)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(fd, string(bytes))
+		return nil
+	}, func() { fd.Close() }, nil
+}
+
+func getWebhookWriter(url string) (bounty.OutputWriter, bounty.OutputCleaner, error) {
+	return func(rec map[string]string) error {
+		bytes, err := json.Marshal(rec)
+		if err != nil {
+			return err
+		}
+		return sendWebhook(url, string(bytes))
+	}, bounty.OutputCleanerNoOp, nil
+}
+
+func setupSSH(rw *bounty.RecordWriter) {
 
 	sshHostKey := ""
 	if params.SSHHostKey != "" {
@@ -86,6 +204,7 @@ func setupSSH() {
 		sshConf := bounty.NewConfSSH()
 		sshConf.PrivateKey = sshHostKey
 		sshConf.BindPort = uint16(port)
+		sshConf.RecordWriter = rw
 		if err := bounty.SpawnSSH(sshConf); err != nil {
 			log.Fatalf("failed to start ssh server: %q", err)
 		}
@@ -95,7 +214,7 @@ func setupSSH() {
 	protocolCount++
 }
 
-func setupSNMP() {
+func setupSNMP(rw *bounty.RecordWriter) {
 
 	// Create a listener for each port
 	snmpPorts, err := bounty.CrackPorts(params.SNMPPorts)
@@ -107,6 +226,7 @@ func setupSNMP() {
 		port := port
 		snmpConf := bounty.NewConfSNMP()
 		snmpConf.BindPort = uint16(port)
+		snmpConf.RecordWriter = rw
 		if err := bounty.SpawnSNMP(snmpConf); err != nil {
 			log.Fatalf("failed to start snmp server: %q", err)
 		}
@@ -114,4 +234,27 @@ func setupSNMP() {
 	}
 
 	protocolCount++
+}
+
+func sendWebhook(url string, msg string) error {
+	body, _ := json.Marshal(map[string]string{"text": msg})
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("User-Agent", fmt.Sprintf("bounty/%s", Version))
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: time.Second * time.Duration(15)}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("bad response: %d", resp.StatusCode)
+	}
+
+	return nil
 }

@@ -12,11 +12,12 @@ import (
 
 // ConfSNMP describes the options for a snmp service
 type ConfSNMP struct {
-	BindPort uint16
-	BindHost string
-	shutdown bool
-	listener net.PacketConn
-	m        sync.Mutex
+	BindPort     uint16
+	BindHost     string
+	RecordWriter *RecordWriter
+	shutdown     bool
+	listener     net.PacketConn
+	m            sync.Mutex
 }
 
 // IsShutdown checks to see if the service is shutting down
@@ -117,7 +118,7 @@ func snmpProcessData(c *ConfSNMP, raddr net.Addr, data []byte) {
 		// - Handle SNMP v3
 		// - Handle SNMP Traps
 
-		RecordCredential("snmp", raddr.String(), map[string]string{
+		c.RecordWriter.Record("snmp", raddr.String(), map[string]string{
 			"community": res.Community,
 			"version":   res.Version.String(),
 			"port":      fmt.Sprintf("%d", c.BindPort),
