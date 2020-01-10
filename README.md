@@ -14,19 +14,33 @@ $ GOOS=win32 GOARCH=amd64 go build -o bounty.exe
 ```
 
 ```
-$ go get github.com/hdm/bounty && go install -v github.com/hdm/bounty && $GOPATH/bin/bounty
+$ go get -u -v github.com/hdm/bounty && go install -v github.com/hdm/bounty && $GOPATH/bin/bounty
 ```
 
 2. Run the binary and collect credentials
 ```
-C:\> bounty.exe
+C:\> bounty.exe bounty.log
 
-time="2020-01-09T22:50:09-04:00" level=info community=public port=161 proto=snmp src="192.168.88.1:50454" version=2c
+{"_etime":"2020-01-10T17:56:51Z","_host":"1.2.3.4:18301","_proto":"ssh","method":"pubkey","pubkey":"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPVSxqrWfNle0nnJrKS3NA12uhu9PHxnP4OlD843tRz/","pubkey-sha256":"SHA256:/7UkXjk0XtBe9N6RrAGGgJTGuKKi1Hgk3E+4TPo54Cw","username":"devuser","version":"SSH-2.0-OpenSSH_for_Windows_7.7"}
 
-time="2020-01-09T22:50:09-04:00" level=info community=private port=161 proto=snmp src="192.168.88.1:50454" version=2c
+{"_etime":"2020-01-10T17:56:52Z","_host":"1.2.3.4:1361","_proto":"ssh","method":"password","password":"SuperS3kr3t^!","username":"root","version":"SSH-2.0-OpenSSH_for_Windows_7.7"}
 
-time="2020-01-09T22:44:31-04:00" level=info method=password password=SuperS3cret^@@ proto=ssh src="127.0.0.1:62428" username=root version=SSH-2.0-OpenSSH_for_Windows_7.7
-
-time="2020-01-09T22:44:29-04:00" level=info method=pubkey proto=ssh pubkey="ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBAab7o6TbLRk4m4OgM52+rv8HEDDj6qceyOckiX+W36iNWHOoXthI0tcZcg7A3bAj4XVJFaD+rvYuJ2u9+KeyHw=" pubkey-sha256="SHA256:Br+7Zi1y9Zr72Ps5v3oy3JMol+yPr4ed07LOUs0v7RE" src="127.0.0.1:62428" username=svc-account-a version=SSH-2.0-OpenSSH_for_Windows_7.7
+{"_etime":"2020-01-10T17:56:53Z","_host":"1.2.3.4:9992","_proto":"ssh","method":"password","password":"DefaultPotato","username":"vulnscan-a","version":"SSH-2.0-OpenSSH_for_Windows_7.7"}
 
 ```
+
+## Options
+
+Use `--protocols` to configure a list of enabled protocol listeners
+
+Use additional options to specify ports and protocol options for listeners.
+
+All additional command-line arguments are output destinations.
+
+Supported outputs:
+
+ * `-` or not option results in output being written to standard output
+ * http://[url] or https://[url] will deliver results via webhook (slack, mattermost, etc)
+ * anything else is treated as an output file name
+
+ 
