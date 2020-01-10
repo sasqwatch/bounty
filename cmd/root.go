@@ -13,8 +13,10 @@ var BuildDate = "2020-01-01"
 
 type bountyParameters struct {
 	Verbose    bool
+	SNMPPorts  string
 	SSHPorts   string
 	SSHHostKey string
+	Protocols  string
 }
 
 var params = &bountyParameters{}
@@ -41,6 +43,10 @@ func init() {
 
 	// General options
 	rootCmd.PersistentFlags().BoolVarP(&params.Verbose, "verbose", "v", false, "Display verbose output")
+	rootCmd.Flags().StringVarP(&params.Protocols, "protocols", "", "ssh,snmp", "Specify a comma-separated list of protocols")
+
+	// SNMP parameters
+	rootCmd.Flags().StringVarP(&params.SNMPPorts, "snmp-ports", "", "161", "The list of UDP ports to listen on for SNMP")
 
 	// SSH parameters
 	rootCmd.Flags().StringVarP(&params.SSHPorts, "ssh-ports", "", "22", "The list of TCP ports to listen on for SSH")
